@@ -1,5 +1,6 @@
 import { Router } from "express";
 import Cart from "../models/Cart.js";
+import { Types } from "mongoose";
 
 let router = Router();
 
@@ -45,6 +46,58 @@ router.get("/users/:uid", async (req, res, next) => {
       success: true,
       response: carts,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// READ BILL FROM ONE USER
+router.get("/bills/:uid", async (req, res, next) => {
+  try {
+    // let all = await Cart.find();
+    let userId = req.params.uid;
+    let data = await Cart.aggregate([
+      { $match: { user_id: new Types.ObjectId(userId) } }, //filtro carrito por usuario
+      {
+        $lookup: {
+          foreignField: "_id",
+          from: "users",
+          localField: "user_id",
+          as: "user_id",
+        },
+      }, //pupulate los datos del usuario
+      {
+        $lookup: {
+          foreignField: "_id",
+          from: "movies",
+          localField: "movie_id",
+          as: "movie_id",
+        },
+      },
+      {
+        $replaceRoot: {
+          // Reemplazo la ubicación de los elementos del array populados
+          newRoot: {
+            $mergeObjects: [{ $arrayElemAt: ["$movie_id", 0] }, "$$ROOT"],
+          },
+        },
+      },
+      { $set: { total: { $multiply: ["$quantity", "$price"] } } }, // Agregamos la propiedad total que tiene el resultado del precio x cantidad
+      {
+        $project: {
+          movie_id: 0,
+          quantity: 0,
+          price: 0,
+          capacity: 0,
+          __v: 0,
+          active: 0,
+        },
+      }, // limpia el objeto
+      { $group: { _id: "$user_id", sum: { $sum: "$total" } } }, // agrupo y reduzco
+      { $project: { _id: 0, user_id: "$_id", sum: "$sum" } },
+      { $merge: { into: "bills" } },
+    ]);
+    return res.status(200).json({ success: true, response: data });
   } catch (error) {
     next(error);
   }

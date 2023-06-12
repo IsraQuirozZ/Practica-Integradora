@@ -17,7 +17,14 @@ router.post("/", async (req, res, next) => {
 
 router.get("/", async (req, res, next) => {
   try {
-    let movies = await Movie.find();
+    let page = 0;
+    if (req.query.page) {
+      page = req.query.page;
+    }
+    let limit = req.query.limit ?? 5;
+    // let movies = await Movie.find().skip(page).limit(limit); //Método manual de paginación
+    let title = req.query.title ? new RegExp(req.query.title, "i") : "";
+    let movies = await Movie.paginate({ title: title }, { limit, page }); // Método de paginación con libreria
     if (movies) {
       return res.status(200).json({
         success: true,
